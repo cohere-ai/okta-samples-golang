@@ -76,12 +76,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	q.Add("client_id", os.Getenv("CLIENT_ID"))
 	q.Add("response_type", "code")
 	q.Add("response_mode", "query")
-	q.Add("scope", "openid email")
+	q.Add("scope", "openid email profile")
 	q.Add("redirect_uri", "http://localhost:8071/authorization-code/callback")
 	q.Add("state", state)
 	q.Add("nonce", nonce)
 
-	redirectPath = os.Getenv("ISSUER") + "/v1/authorize?" + q.Encode()
+	redirectPath = os.Getenv("ISSUER") + "/oauth2/v1/authorize?" + q.Encode()
 
 	fmt.Println(redirectPath)
 
@@ -100,17 +100,22 @@ func AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(1)
 	exchange := exchangeCode(r.URL.Query().Get("code"), r)
 	if exchange.Error != "" {
 		fmt.Println(exchange.Error)
 		fmt.Println(exchange.ErrorDescription)
 		return
 	}
+	fmt.Println(2)
 
 	session, err := sessionStore.Get(r, "okta-hosted-login-session-store")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	fmt.Println(3)
 
 	_, verificationError := verifyToken(exchange.IdToken)
 
@@ -118,6 +123,8 @@ func AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Print("Verfication Error:\n\t")
 		fmt.Println(verificationError)
 	}
+
+	fmt.Println(4)
 
 	if verificationError == nil {
 		session.Values["id_token"] = exchange.IdToken
@@ -165,7 +172,7 @@ func exchangeCode(code string, r *http.Request) Exchange {
 	q.Set("code", code)
 	q.Add("redirect_uri", "http://localhost:8071/authorization-code/callback")
 
-	url := os.Getenv("ISSUER") + "/v1/token?" + q.Encode()
+	url := os.Getenv("ISSUER") + "/oauth2/v1/token?" + q.Encode()
 
 	req, _ := http.NewRequest("POST", url, bytes.NewReader([]byte("")))
 	h := req.Header
@@ -181,7 +188,7 @@ func exchangeCode(code string, r *http.Request) Exchange {
 	fmt.Println(string(body))
 	defer resp.Body.Close()
 	var exchange Exchange
-	err :=json.Unmarshal(body, &exchange)
+	err := json.Unmarshal(body, &exchange)
 	if err != nil {
 		fmt.Println("FUCK!")
 		fmt.Println(err)
@@ -209,7 +216,7 @@ func getProfileData(r *http.Request) map[string]string {
 		return m
 	}
 
-	reqUrl := os.Getenv("ISSUER") + "/v1/userinfo"
+	reqUrl := os.Getenv("ISSUER") + "/oauth2/v1/userinfo"
 
 	req, _ := http.NewRequest("GET", reqUrl, bytes.NewReader([]byte("")))
 	h := req.Header
@@ -234,9 +241,10 @@ func verifyToken(t string) (*verifier.Jwt, error) {
 		ClaimsToValidate: tv,
 	}
 
+	fmt.Println("the token:", t)
 	result, err := jv.New().VerifyIdToken(t)
 	if err != nil {
-		return nil, fmt.Errorf("%s", err)
+		return nil, fmt.Errorf("yo %s", err)
 	}
 
 	if result != nil {
