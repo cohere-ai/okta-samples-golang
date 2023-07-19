@@ -45,8 +45,8 @@ func main() {
 	http.HandleFunc("/profile", ProfileHandler)
 	http.HandleFunc("/logout", LogoutHandler)
 
-	log.Print("server starting at localhost:8080 ... ")
-	err := http.ListenAndServe("localhost:8080", nil)
+	log.Print("server starting at localhost:8071 ... ")
+	err := http.ListenAndServe("localhost:8071", nil)
 	if err != nil {
 		log.Printf("the HTTP server failed to start: %s", err)
 		os.Exit(1)
@@ -76,22 +76,24 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	q.Add("client_id", os.Getenv("CLIENT_ID"))
 	q.Add("response_type", "code")
 	q.Add("response_mode", "query")
-	q.Add("scope", "openid profile email")
-	q.Add("redirect_uri", "http://localhost:8080/authorization-code/callback")
+	q.Add("scope", "openid email")
+	q.Add("redirect_uri", "http://localhost:8071/authorization-code/callback")
 	q.Add("state", state)
 	q.Add("nonce", nonce)
 
 	redirectPath = os.Getenv("ISSUER") + "/v1/authorize?" + q.Encode()
+
+	fmt.Println(redirectPath)
 
 	http.Redirect(w, r, redirectPath, http.StatusFound)
 }
 
 func AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Check the state that was returned in the query string is the same as the above state
-	if r.URL.Query().Get("state") != state {
-		fmt.Fprintln(w, "The state was not as expected")
-		return
-	}
+	// if r.URL.Query().Get("state") != state {
+	// 	fmt.Fprintln(w, "The state was not as expected")
+	// 	return
+	// }
 	// Make sure the code was provided
 	if r.URL.Query().Get("code") == "" {
 		fmt.Fprintln(w, "The code was not returned or is not accessible")
@@ -113,6 +115,7 @@ func AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	_, verificationError := verifyToken(exchange.IdToken)
 
 	if verificationError != nil {
+		fmt.Print("Verfication Error:\n\t")
 		fmt.Println(verificationError)
 	}
 
@@ -160,7 +163,7 @@ func exchangeCode(code string, r *http.Request) Exchange {
 	q := r.URL.Query()
 	q.Add("grant_type", "authorization_code")
 	q.Set("code", code)
-	q.Add("redirect_uri", "http://localhost:8080/authorization-code/callback")
+	q.Add("redirect_uri", "http://localhost:8071/authorization-code/callback")
 
 	url := os.Getenv("ISSUER") + "/v1/token?" + q.Encode()
 
@@ -175,9 +178,14 @@ func exchangeCode(code string, r *http.Request) Exchange {
 	client := &http.Client{}
 	resp, _ := client.Do(req)
 	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(body))
 	defer resp.Body.Close()
 	var exchange Exchange
-	json.Unmarshal(body, &exchange)
+	err :=json.Unmarshal(body, &exchange)
+	if err != nil {
+		fmt.Println("FUCK!")
+		fmt.Println(err)
+	}
 
 	return exchange
 }
